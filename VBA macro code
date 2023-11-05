@@ -1,0 +1,134 @@
+Sub Bens_Pivot_1()
+
+    Dim wsSource As Worksheet
+    Dim wsPivot As Worksheet
+    Dim wsComparison As Worksheet
+    Dim pvtCache As PivotCache
+    Dim pvtTable As PivotTable
+    Dim startPvt As String
+    Dim srcData As String
+    Dim pvtField As PivotField
+    Dim chartObj As ChartObject
+    Dim leaType As Range
+    Dim dataValidationRange As Range
+    Dim totalCheck As Boolean
+
+    ' Set references to the source data worksheet and other initial settings
+    Set wsSource = ThisWorkbook.Sheets("Schools")
+
+    ' Define the source data range dynamically, excluding row 2271
+    srcData = wsSource.Range("A1").CurrentRegion.Resize(wsSource.Range("A1").CurrentRegion.Rows.Count - 1).Address(External:=True)
+
+    ' Add a new worksheet for the PivotTable
+    Set wsPivot = ThisWorkbook.Worksheets.Add
+    wsPivot.Name = "PivotTableReport"
+
+    ' Define the start of the PivotTable
+    startPvt = wsPivot.Cells(1, 1).Address
+
+    ' Create the Pivot Cache from Source Data
+    Set pvtCache = ThisWorkbook.PivotCaches.Create(SourceType:=xlDatabase, SourceData:=srcData)
+
+    ' Create Pivot table from Pivot Cache
+    Set pvtTable = pvtCache.CreatePivotTable(TableDestination:=wsPivot.Range(startPvt), TableName:="FundingSummaryPivotTable")
+
+' Configure the PivotTable
+With pvtTable
+    .ClearTable
+    
+    ' Attempt to set up the row fields
+    On Error Resume Next ' Ignore errors temporarily
+    Set pvtField = .PivotFields("LEA Type")
+    If Not pvtField Is Nothing Then
+        pvtField.Orientation = xlRowField
+        pvtField.Position = 1
+        ' Filter out the (blank) row
+        pvtField.PivotItems("(blank)").Visible = False
+    End If
+    On Error GoTo 0 ' Resume normal error handling
+    
+    ' Attempt to set up the data fields
+    On Error Resume Next ' Ignore errors temporarily
+    Set pvtField = .PivotFields("Total LEA Enrollment")
+    If Not pvtField Is Nothing Then
+        pvtField.Orientation = xlDataField
+        pvtField.Function = xlAverage
+        pvtField.Name = "Average of Total LEA Enrollment"
+        ' Format "Average of Total LEA Enrollment" field as currency rounded to the nearest dollar
+        pvtField.NumberFormat = "$#,##0"
+    End If
+
+    Set pvtField = .PivotFields("Preliminary AMS Entitlement")
+    If Not pvtField Is Nothing Then
+        pvtField.Orientation = xlDataField
+        pvtField.Function = xlSum
+        pvtField.Name = "Sum of Preliminary AMS Entitlement"
+        ' Format "Sum of Preliminary AMS Entitlement" field as currency rounded to the nearest dollar
+        pvtField.NumberFormat = "$#,##0"
+    End If
+    On Error GoTo 0 ' Resume normal error handling
+    
+    ' Refresh the PivotTable
+    .RefreshTable
+End With
+
+
+    ' Add a new worksheet for the comparison table
+    Set wsComparison = ThisWorkbook.Worksheets.Add
+    wsComparison.Name = "FundingComparison"
+
+    ' Copy LEA Type and Total Funding to the new worksheet for comparison table
+    wsSource.Range("G:G").Copy
+    wsComparison.Range("A1").PasteSpecial Paste:=xlPasteValues
+    wsSource.Range("P:P").Copy
+    wsComparison.Range("B1").PasteSpecial Paste:=xlPasteValues
+
+    ' Remove duplicates from LEA Type column
+    wsComparison.Range("A:A").RemoveDuplicates Columns:=1, Header:=xlYes
+
+    ' Calculate total funding per LEA Type
+    For Each leaType In wsComparison.Range("A2:A" & wsComparison.Cells(wsComparison.Rows.Count, "A").End(xlUp).Row)
+        leaType.Offset(0, 1).Value = Application.WorksheetFunction.SumIf(wsSource.Range("G:G"), leaType.Value, wsSource.Range("P:P"))
+    Next leaType
+
+    ' Format the amounts as currency
+    wsComparison.Range("B2:B" & wsComparison.Cells(wsComparison.Rows.Count, "B").End(xlUp).Row).NumberFormat = "$#,##0"
+
+' Create a 3D Pie Chart for the funding comparison
+Dim lastRow As Long
+lastRow = wsComparison.Cells(wsComparison.Rows.Count, "A").End(xlUp).Row
+
+Set chartObj = wsComparison.ChartObjects.Add(Left:=wsComparison.Range("D1").Left, Width:=375, Top:=wsComparison.Range("D1").Top, Height:=225)
+With chartObj.Chart
+    .SetSourceData Source:=wsComparison.Range("$A$1:$B$" & lastRow)
+    .ChartType = xl3DPieExploded
+    .HasTitle = True
+    .ChartTitle.Text = "Funding Comparison by LEA Type"
+
+    ' Ensure data labels are added to the chart series before formatting
+    .SeriesCollection(1).ApplyDataLabels
+    ' Format data labels
+    With .SeriesCollection(1).DataLabels
+        .NumberFormat = "$#,##0"
+        .Position = xlLabelPositionOutsideEnd
+    End With
+End With
+
+
+    ' Delete data from column B row 6 to 2271
+    wsComparison.Range("B6:B2271").ClearContents
+
+    ' Check if the total in the comparison table matches the original total from the 'Schools' sheet
+    Set dataValidationRange = wsComparison.Range("B2:B" & wsComparison.Cells(wsComparison.Rows.Count, "B").End(xlUp).Row)
+    totalCheck = (Application.WorksheetFunction.Sum(dataValidationRange) = wsSource.Cells(2271, "P").Value)
+
+    ' Add the True/False check result to the next available cell in Column A
+    wsComparison.Cells(wsComparison.Rows.Count, "A").End(xlUp).Offset(1, 0).Value = "Total Check:"
+    wsComparison.Cells(wsComparison.Rows.Count, "A").End(xlUp).Offset(1, 1).Value = totalCheck
+
+    ' Confirmation message
+    MsgBox "PivotTable and Funding Comparison Chart have been created.", vbInformation
+
+End Sub
+
+
