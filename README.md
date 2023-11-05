@@ -5,7 +5,7 @@ Hello!
 
 This repo contains Schools Data.xlsm which inlcudes a dataset regarding funding from the California Department of Education.
 
-Once opened, you can explore the data and navigate to the Developer tab. There you will see the macro "Bens_Pivot_1" (you can also find the VBA code in the file called "VBA macro" within this repo)
+Once opened, you can explore the data and navigate to the Developer tab. There you will see the macro "Bens_Pivot_1" (you can also find the VBA code in the file called "VBA macro code" within this repo)
 
 Running the macro generates a Pivot Table in a one sheet and a 3-D Pie Chart in another sheet.
 
